@@ -7,6 +7,13 @@
   const P = window.Platform;
   const SLOTS = C.gridCols * C.gridRows;
 
+  // ---------- защита от зума в мобильных браузерах ----------
+  // Двойной-тап-зум гасит touch-action: manipulation в CSS (на всех элементах).
+  // Здесь добиваем pinch-жест на iOS - клики он не трогает.
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) { e.preventDefault(); }, { passive: false });
+  });
+
   // ---------- локализация ----------
   const I18N = {
     ru: {
