@@ -1,0 +1,220 @@
+* { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+
+:root {
+  --bg: #1a1530;
+  --panel: #2a2347;
+  --panel-2: #352c5c;
+  --text: #f2eeff;
+  --dim: #a99fd1;
+  --accent: #ffb300;
+  --green: #4cd964;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+
+#app {
+  max-width: 480px;
+  height: 100dvh;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  gap: 8px;
+}
+
+/* ---------- шапка ---------- */
+#topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--panel); border-radius: 16px; padding: 8px 14px;
+}
+.stat { display: flex; align-items: center; gap: 10px; }
+.coin-icon { font-size: 30px; }
+.stat-big { font-size: 22px; font-weight: 800; }
+.stat-small { font-size: 13px; color: var(--green); font-weight: 700; }
+.topbar-btns { display: flex; gap: 6px; }
+.icon-btn {
+  background: var(--panel-2); border: none; border-radius: 12px;
+  font-size: 20px; padding: 8px 10px; cursor: pointer; color: var(--text);
+  font-family: inherit;
+}
+.icon-btn.boost { font-size: 14px; font-weight: 800; }
+.icon-btn.boost:disabled { color: var(--accent); }
+
+/* ---------- подсказка ---------- */
+#hint {
+  min-height: 22px; text-align: center; color: var(--accent);
+  font-size: 14px; font-weight: 700;
+}
+
+/* ---------- игровое поле ---------- */
+#playfield { flex: 1; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+
+#mascot-zone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 4px 0;
+  flex-shrink: 0;
+}
+#mascot {
+  font-size: min(17vh, 110px);
+  cursor: pointer;
+  transition: transform .08s;
+  filter: drop-shadow(0 6px 14px rgba(255, 179, 0, .25));
+}
+#mascot:active { transform: scale(.9); }
+#mascot-label { text-align: center; font-weight: 800; font-size: 13px; color: var(--dim); letter-spacing: 1px; }
+#tap-power { color: var(--accent); }
+
+#grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  flex: 1;
+  min-height: 0;
+  gap: 8px;
+  padding: 10px;
+  background: var(--panel);
+  border-radius: 20px;
+}
+.slot {
+  min-height: 0;
+  background: var(--panel-2);
+  border-radius: 14px;
+  border: 2px dashed rgba(255,255,255,.08);
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.slot.drop-ok { border-color: var(--green); background: rgba(76,217,100,.12); }
+
+.beast {
+  width: 92%; height: 92%;
+  border-radius: 12px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: grab;
+  background: rgba(0,0,0,.25);
+  border: 2px solid var(--rarity, #9aa0a6);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--rarity, #9aa0a6) 40%, transparent);
+  touch-action: none;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+}
+.beast.dragging { opacity: .85; z-index: 100; cursor: grabbing; pointer-events: none; }
+.beast .b-emoji { font-size: clamp(24px, 6.5vh, 42px); line-height: 1; }
+.beast .b-tier {
+  position: absolute; top: 3px; right: 5px;
+  font-size: 11px; font-weight: 800; color: var(--rarity, #9aa0a6);
+}
+.beast .b-income { font-size: 10px; color: var(--dim); font-weight: 700; }
+.beast.pop { animation: pop .35s ease; }
+@keyframes pop {
+  0% { transform: scale(.4); }
+  60% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- нижние кнопки ---------- */
+#actions { display: flex; gap: 8px; position: relative; z-index: 10; flex-shrink: 0; }
+.action-btn {
+  flex: 1;
+  background: linear-gradient(180deg, #4cd964, #2fae49);
+  color: #fff; border: none; border-radius: 16px;
+  padding: 10px 6px; font-family: inherit; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  box-shadow: 0 4px 0 rgba(0,0,0,.3);
+  transition: transform .06s, filter .2s;
+}
+.action-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.3); }
+.action-btn.case { background: linear-gradient(180deg, #ffb300, #e08e00); }
+.action-btn:disabled { filter: grayscale(.9) brightness(.6); cursor: default; }
+.btn-title { font-weight: 800; font-size: 14px; }
+.btn-cost { font-size: 12px; font-weight: 700; opacity: .9; }
+
+/* ---------- модалки ---------- */
+.modal {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(10,7,25,.85);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal.hidden, .hidden { display: none !important; }
+.modal-box {
+  background: var(--panel); border-radius: 24px; padding: 28px;
+  text-align: center; width: min(86vw, 340px);
+  display: flex; flex-direction: column; gap: 14px; align-items: center;
+}
+#case-anim { font-size: 90px; }
+#case-anim.shaking { animation: shake .12s infinite; }
+@keyframes shake {
+  0%, 100% { transform: rotate(-6deg) scale(1.02); }
+  50% { transform: rotate(6deg) scale(.98); }
+}
+#case-emoji { font-size: 90px; animation: pop .4s ease; }
+#case-name { font-size: 20px; font-weight: 800; }
+#case-rarity { font-weight: 800; letter-spacing: 1px; }
+.fine-print { font-size: 11px; color: var(--dim); }
+
+/* ---------- всплывающие цифры ---------- */
+.floater {
+  position: fixed; z-index: 150;
+  font-weight: 800; color: var(--accent);
+  pointer-events: none;
+  animation: floatUp .9s ease-out forwards;
+  text-shadow: 0 2px 6px rgba(0,0,0,.6);
+}
+@keyframes floatUp {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-70px) scale(1.3); }
+}
+
+/* ---------- новые элементы v0.3 ---------- */
+.b-img { width: 72%; height: 58%; object-fit: contain; pointer-events: none; }
+#mascot img { width: min(17vh, 110px); height: min(17vh, 110px); object-fit: contain; }
+.big-img { width: 110px; height: 110px; object-fit: contain; }
+.big-emoji { font-size: 90px; }
+
+.action-btn.small { padding: 8px 12px; font-size: 13px; flex: none; }
+.action-btn.pulse { animation: pulse 1.2s infinite; }
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+.modal-box.wide { width: min(92vw, 400px); }
+#case-box { border: 2px solid var(--rarity, transparent); }
+
+#collection-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  width: 100%; max-height: 55vh; overflow-y: auto;
+}
+.coll-cell {
+  background: var(--panel-2); border-radius: 12px; padding: 8px 4px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  border: 2px solid var(--rarity, transparent);
+}
+.coll-cell.unknown { opacity: .45; border-color: transparent; }
+.coll-cell .b-emoji { font-size: 32px; }
+.coll-cell .b-img { width: 40px; height: 40px; }
+.coll-name { font-size: 11px; font-weight: 800; text-align: center; }
+.coll-rarity { font-size: 10px; font-weight: 800; }
+
+.streak-dot {
+  display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--panel-2); margin: 0 3px;
+}
+.streak-dot.on { background: var(--accent); }
+
+/* десктоп: рамка телефона */
+@media (min-width: 560px) {
+  body { background: #0d0a1c; }
+  #app {
+    border: 1px solid #3a2f66; border-radius: 24px;
+    margin-top: 8px; height: calc(100dvh - 16px);
+    background: var(--bg);
+  }
+}

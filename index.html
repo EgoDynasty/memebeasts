@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Мемные Звери Мердж</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <header id="topbar">
+    <div class="stat">
+      <div class="coin-icon">🪙</div>
+      <div>
+        <div id="coins" class="stat-big">0</div>
+        <div id="income" class="stat-small">+0/сек</div>
+      </div>
+    </div>
+    <div class="topbar-btns">
+      <button id="boost-btn" class="icon-btn boost" title="x2">📺 x2</button>
+      <button id="collection-btn" class="icon-btn" title="Коллекция">📖</button>
+      <button id="mute-btn" class="icon-btn" title="Звук">🔊</button>
+    </div>
+  </header>
+
+  <div id="hint"></div>
+
+  <main id="playfield">
+    <div id="mascot-zone">
+      <div id="mascot"><span id="mascot-face">🦫</span></div>
+      <div id="mascot-label"><span data-i18n="mascot_name">КАПИБАРА</span><br><span id="tap-power">+1</span></div>
+    </div>
+    <div id="grid"></div>
+  </main>
+
+  <footer id="actions">
+    <button id="buy-btn" class="action-btn">
+      <span class="btn-title" data-i18n="buy_title">Купить зверя</span>
+      <span class="btn-cost" id="buy-cost">🪙 50</span>
+    </button>
+    <button id="case-btn" class="action-btn case">
+      <span class="btn-title" id="case-title">📦 Кейс</span>
+      <span class="btn-cost" id="case-cost">🪙 300</span>
+    </button>
+    <button id="tap-upgrade-btn" class="action-btn">
+      <span class="btn-title" data-i18n="tap_title">💪 Тап +</span>
+      <span class="btn-cost" id="tap-cost">🪙 100</span>
+    </button>
+  </footer>
+
+  <!-- Кейс -->
+  <div id="case-modal" class="modal hidden">
+    <div class="modal-box" id="case-box">
+      <div id="case-anim">📦</div>
+      <div id="case-result" class="hidden">
+        <div id="case-emoji"></div>
+        <div id="case-name"></div>
+        <div id="case-rarity"></div>
+        <button id="case-upgrade" class="action-btn small hidden"></button>
+      </div>
+      <button id="case-close" class="action-btn hidden" data-i18n="take">Забрать!</button>
+    </div>
+  </div>
+
+  <!-- Оффлайн-доход -->
+  <div id="offline-modal" class="modal hidden">
+    <div class="modal-box">
+      <div style="font-size:48px">😴→🤑</div>
+      <h2 data-i18n="offline_title">Пока тебя не было...</h2>
+      <p><span data-i18n="offline_earned">Звери заработали</span> <b id="offline-amount">0</b> 🪙</p>
+      <button id="offline-claim" class="action-btn" data-i18n="claim">Забрать</button>
+      <button id="offline-double" class="action-btn case" data-i18n="claim_x2">Забрать x2 📺</button>
+    </div>
+  </div>
+
+  <!-- Ежедневный бонус -->
+  <div id="daily-modal" class="modal hidden">
+    <div class="modal-box">
+      <div style="font-size:48px">🎁</div>
+      <h2 data-i18n="daily_title">Ежедневный бонус</h2>
+      <p id="daily-day"></p>
+      <div id="daily-streak"></div>
+      <p><b id="daily-amount"></b></p>
+      <button id="daily-claim" class="action-btn" data-i18n="claim">Забрать</button>
+    </div>
+  </div>
+
+  <!-- Коллекция -->
+  <div id="collection-modal" class="modal hidden">
+    <div class="modal-box wide">
+      <h2 data-i18n="collection">Коллекция</h2>
+      <div id="collection-grid"></div>
+      <button id="collection-close" class="action-btn" data-i18n="close">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- Оценка -->
+  <div id="rate-modal" class="modal hidden">
+    <div class="modal-box">
+      <div style="font-size:48px">⭐</div>
+      <h2 data-i18n="rate_title">Залетела игра?</h2>
+      <p data-i18n="rate_text">Оценка помогает зверям пробиться в топ!</p>
+      <button id="rate-yes" class="action-btn case" data-i18n="rate_yes">Оценить ⭐</button>
+      <button id="rate-no" class="action-btn" data-i18n="rate_no">Позже</button>
+    </div>
+  </div>
+
+  <!-- Заглушка рекламы (локальный режим без SDK) -->
+  <div id="ad-mock" class="modal hidden">
+    <div class="modal-box">
+      <div style="font-size:48px">📺</div>
+      <p data-i18n="ad_mock">РЕКЛАМА (заглушка, на площадке будет настоящая)</p>
+      <div id="ad-mock-timer" class="stat-big">2</div>
+    </div>
+  </div>
+
+</div>
+<script src="config.js"></script>
+<script src="platform.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
