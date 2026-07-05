@@ -18,8 +18,10 @@ window.CONFIG = {
   ],
 
   // Доход зверя в сек = incomeBase * incomeGrowth^(tier-1) * множитель редкости
+  // 2.2 (было 2.4): кривая площе, за час виден весь контент, но мердж всё ещё >2 -
+  // то есть слить двух всегда выгоднее по доходу, число на мердже растёт, ощущается приятно.
   incomeBase: 1,
-  incomeGrowth: 2.4,
+  incomeGrowth: 2.2,
 
   // Редкости: шанс из кейса (%) и множитель дохода
   rarities: [
@@ -29,16 +31,22 @@ window.CONFIG = {
     { id: 'legendary', name: 'ЛЕГЕНДАРНЫЙ',  chance: 1,  mult: 10, color: '#ffb300' },
   ],
 
-  // Бонус соседства: +10% дохода за каждого соседа той же редкости (по горизонтали/вертикали)
-  neighborBonus: 0.10,
+  // Бонус соседства: +20% дохода за каждого соседа той же редкости (по горизонтали/вертикали).
+  // Усилено с 10% и теперь подсвечивается на поле - держать одноредкостных рядом реально выгодно.
+  neighborBonus: 0.20,
 
   // Поле
   gridCols: 3,
   gridRows: 4,
+  // Старт с slotsStart открытых слотов из gridCols*gridRows, остальные открываются за монеты.
+  // Цена следующего слота = slotCostBase * slotCostGrowth^(открыто_сверх_старта)
+  slotsStart: 6,
+  slotCostBase: 600,
+  slotCostGrowth: 1.8,
 
   // Магазин: цена tier-1 зверя = buyBase * buyGrowth^кол-во_купленных
   buyBase: 50,
-  buyGrowth: 1.22,
+  buyGrowth: 1.20,
 
   // Тап: сила = tapBase * tapGrowth^уровень, цена апгрейда = tapCostBase * tapCostGrowth^уровень
   tapBase: 1,
@@ -48,11 +56,14 @@ window.CONFIG = {
 
   // Кейсы: цена = caseBase * caseGrowth^открыто
   caseBase: 300,
-  caseGrowth: 1.28,
-  // Шансы тира из кейса (тир 1..4, режется по прогрессу игрока)
-  caseTierWeights: [60, 25, 10, 5],
+  caseGrowth: 1.30,
+  // Дроп тира кейса привязан к прогрессу: окно из caseDropWindow тиров у потолка игрока,
+  // потолок = highestTier - caseDropCeilOffset. Внутри окна ниже тир - вероятнее (вес 0.6^шаг).
+  // Так кейс в лейте роняет зверей рядом с твоим уровнем, а не бесполезный тир 1.
+  caseDropCeilOffset: 2,
+  caseDropWindow: 3,
   // Pity: гарантированная легендарка каждые N кейсов
-  pityEvery: 40,
+  pityEvery: 45,
 
   // Оффлайн-доход: кэп в секундах (2 часа)
   offlineCapSec: 2 * 60 * 60,
@@ -76,6 +87,16 @@ window.CONFIG = {
   dailyIncomeSec: 600,
   dailyMin: 500,
   dailyCaseEvery: 7,
+
+  // Квесты: последовательные цели с наградой, дают направление и импульсы дохода.
+  // metric: bought | merges | tier | cases | collected
+  quests: [
+    { id: 'buy',     metric: 'bought',    target: 4,  reward: 250,   ru: 'Купи 4 зверей',     en: 'Buy 4 beasts' },
+    { id: 'merge',   metric: 'merges',    target: 3,  reward: 500,   ru: 'Слей 3 мерджа',     en: 'Do 3 merges' },
+    { id: 'tier5',   metric: 'tier',      target: 5,  reward: 2000,  ru: 'Дорасти до тира 5', en: 'Reach tier 5' },
+    { id: 'cases',   metric: 'cases',     target: 5,  reward: 4000,  ru: 'Открой 5 кейсов',   en: 'Open 5 cases' },
+    { id: 'collect', metric: 'collected', target: 8,  reward: 12000, ru: 'Открой 8 зверей',   en: 'Discover 8 beasts' },
+  ],
 
   leaderboard: 'mainscore',   // имя лидерборда в консоли ЯИ
 

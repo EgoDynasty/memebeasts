@@ -23,7 +23,7 @@
       offline_title: 'Пока тебя не было...', offline_earned: 'Звери заработали',
       daily_title: 'Ежедневный бонус', daily_day: 'День подряд: {n}',
       daily_case: 'Сегодня внутри ЛЕГЕНДАРНЫЙ КЕЙС!',
-      collection: 'Коллекция', unknown: '???',
+      collection: 'Коллекция', unknown: '???', quest_label: 'Задание',
       rate_title: 'Залетела игра?', rate_text: 'Оценка помогает зверям пробиться в топ!',
       rate_yes: 'Оценить ⭐', rate_no: 'Позже',
       ad_mock: 'РЕКЛАМА (заглушка, на площадке будет настоящая)',
@@ -44,7 +44,7 @@
       offline_title: 'While you were away...', offline_earned: 'Your beasts earned',
       daily_title: 'Daily bonus', daily_day: 'Day streak: {n}',
       daily_case: 'A LEGENDARY CASE inside today!',
-      collection: 'Collection', unknown: '???',
+      collection: 'Collection', unknown: '???', quest_label: 'Quest',
       rate_title: 'Enjoying the game?', rate_text: 'Your rating helps the beasts reach the top!',
       rate_yes: 'Rate ⭐', rate_no: 'Later',
       ad_mock: 'AD (mock, real ads on the platform)',
@@ -74,6 +74,9 @@
     coins: 0,
     totalEarned: 0,
     grid: Array(SLOTS).fill(null),   // null | {tier, rarity}
+    slots: C.slotsStart,             // сколько слотов открыто (остальные покупаются)
+    merges: 0,                       // счётчик мерджей (для квестов)
+    quest: 0,                        // индекс текущего квеста
     bought: 0,
     paidCases: 0,                    // для цены кейса (бесплатные не дорожают)
     tapLevel: 0,
@@ -116,6 +119,15 @@
     state.grid.forEach(b => { if (b && !state.discovered[b.tier]) state.discovered[b.tier] = b.rarity; });
     if (!state.firstPlayAt) state.firstPlayAt = now();
     if (!state.freeCaseAt) state.freeCaseAt = now() + C.freeCaseCooldownSec;
+    // страховки под новые поля (старые сейвы)
+    if (state.merges == null) state.merges = state.mergedOnce ? 1 : 0;
+    if (state.quest == null) state.quest = 0;
+    if (state.slots == null) {
+      let lastOcc = -1;
+      state.grid.forEach((b, i) => { if (b) lastOcc = i; });
+      state.slots = Math.max(C.slotsStart, lastOcc + 1); // не запираем уже занятые слоты
+    }
+    state.slots = Math.min(state.slots, SLOTS);
   }
 
   // ---------- экономика ----------
@@ -156,7 +168,12 @@
   function tapPower() { return Math.floor(C.tapBase * Math.pow(C.tapGrowth, state.tapLevel)) * boostFactor(); }
   function tapCost()  { return Math.floor(C.tapCostBase * Math.pow(C.tapCostGrowth, state.tapLevel)); }
   function caseCost() { return Math.floor(C.caseBase * Math.pow(C.caseGrowth, state.paidCases)); }
-  function firstEmpty() { return state.grid.findIndex(b => b === null); }
+  function firstEmpty() {
+    for (let i = 0; i < state.slots; i++) if (state.grid[i] === null) return i;
+    return -1;
+  }
+  function canExpand() { return state.slots < SLOTS; }
+  function slotCost() { return Math.floor(C.slotCostBase * Math.pow(C.slotCostGrowth, state.slots - C.slotsStart)); }
   function freeCaseReady() { return now() >= state.freeCaseAt; }
 
   function fmt(n) {
@@ -219,6 +236,7 @@
   const $ = id => document.getElementById(id);
   const els = {
     coins: $('coins'), income: $('income'), hint: $('hint'),
+    quest: $('quest'), questText: $('quest-text'), questProg: $('quest-prog'), questClaim: $('quest-claim'),
     grid: $('grid'), mascot: $('mascot'), mascotFace: $('mascot-face'), tapPower: $('tap-power'),
     buyBtn: $('buy-btn'), buyCost: $('buy-cost'),
     caseBtn: $('case-btn'), caseTitle: $('case-title'), caseCost: $('case-cost'),
@@ -275,11 +293,24 @@
       const slot = document.createElement('div');
       slot.className = 'slot';
       slot.dataset.idx = i;
+      if (i >= state.slots) {
+        // закрытый слот: первый закрытый - покупаемый (с ценой), остальные под замком
+        slot.classList.add('locked');
+        if (i === state.slots) {
+          slot.classList.add('buyable');
+          slot.innerHTML = '<div class="lock-plus">＋</div><div class="lock-cost">🪙 ' + fmt(slotCost()) + '</div>';
+        } else {
+          slot.innerHTML = '<div class="lock-ico">🔒</div>';
+        }
+        els.grid.appendChild(slot);
+        continue;
+      }
       const b = state.grid[i];
       if (b) {
         const r = rarityById[b.rarity];
         const el = document.createElement('div');
         el.className = 'beast';
+        if (hasSameRarityNeighbor(i)) el.classList.add('synergy'); // подсветка бонуса соседства
         el.dataset.idx = i;
         el.style.setProperty('--rarity', r.color);
         el.innerHTML =
@@ -291,6 +322,58 @@
       els.grid.appendChild(slot);
     }
   }
+  function hasSameRarityNeighbor(idx) {
+    const b = state.grid[idx];
+    if (!b) return false;
+    for (const n of neighbors(idx)) {
+      const nb = state.grid[n];
+      if (nb && nb.rarity === b.rarity) return true;
+    }
+    return false;
+  }
+
+  // покупка слота: клик по первому закрытому слоту
+  els.grid.addEventListener('click', (e) => {
+    const slot = e.target.closest('.slot.buyable');
+    if (!slot) return;
+    if (!canExpand() || state.coins < slotCost()) { sfx.fail(); return; }
+    state.coins -= slotCost();
+    state.slots++;
+    sfx.buy();
+    renderGrid(); renderStats(); save();
+  });
+
+  // ---------- квесты ----------
+  function questMetric(q) {
+    switch (q.metric) {
+      case 'bought':    return state.bought;
+      case 'merges':    return state.merges;
+      case 'tier':      return state.highestTier;
+      case 'cases':     return state.casesOpened;
+      case 'collected': return Object.keys(state.discovered).length;
+    }
+    return 0;
+  }
+  function renderQuest() {
+    const q = C.quests[state.quest];
+    if (!q) { els.quest.classList.add('hidden'); return; }
+    els.quest.classList.remove('hidden');
+    els.questText.textContent = (LANG === 'en' ? q.en : q.ru) + ' (+' + fmt(q.reward) + '🪙)';
+    const val = questMetric(q);
+    els.questProg.textContent = Math.min(val, q.target) + '/' + q.target;
+    const done = val >= q.target;
+    els.questClaim.classList.toggle('hidden', !done);
+    els.quest.classList.toggle('ready', done);
+  }
+  els.questClaim.addEventListener('click', () => {
+    const q = C.quests[state.quest];
+    if (!q || questMetric(q) < q.target) return;
+    gain(q.reward);
+    state.quest++;
+    sfx.coin();
+    floater('+' + fmt(q.reward) + '🪙', innerWidth / 2, 130, '#4cd964');
+    renderQuest(); renderStats(); save();
+  });
 
   function renderStats() {
     els.coins.textContent = fmt(state.coins);
@@ -325,6 +408,7 @@
       els.boostBtn.disabled = false;
     }
     renderHint();
+    renderQuest();
   }
 
   function renderHint() {
@@ -459,11 +543,14 @@
     state.firstCaseDone = true;
     if (rarity === 'legendary') state.sinceLegendary = 0;
 
-    const maxDrop = Math.max(1, Math.min(C.caseTierWeights.length, state.highestTier - 1));
-    const weights = C.caseTierWeights.slice(0, maxDrop);
-    const total = weights.reduce((a, b) => a + b, 0);
-    let roll = Math.random() * total, tier = 1;
-    for (let i = 0; i < weights.length; i++) { roll -= weights[i]; if (roll <= 0) { tier = i + 1; break; } }
+    // дроп из окна тиров у потолка игрока: ниже тир в окне - вероятнее
+    const ceil = Math.max(1, state.highestTier - C.caseDropCeilOffset);
+    const floor = Math.max(1, ceil - (C.caseDropWindow - 1));
+    const weights = [];
+    let total = 0;
+    for (let tr = floor; tr <= ceil; tr++) { const w = Math.pow(0.6, tr - floor); weights.push({ tr, w }); total += w; }
+    let roll = Math.random() * total, tier = ceil;
+    for (const o of weights) { roll -= o.w; if (roll <= 0) { tier = o.tr; break; } }
 
     openCaseAnimation(tier, rarity);
     renderStats(); save();
@@ -599,6 +686,7 @@
           state.grid[toIdx] = { tier: newTier, rarity: newRarity };
           state.grid[fromIdx] = null;
           state.mergedOnce = true;
+          state.merges++;
           registerBeast(newTier, newRarity, e.clientX, e.clientY);
           sfx.merge();
           floater(C.animals[newTier - 1].name + '!', e.clientX, e.clientY);
@@ -618,6 +706,7 @@
   }
   function canDrop(fromIdx, toIdx) {
     if (fromIdx === toIdx) return false;
+    if (toIdx >= state.slots) return false; // нельзя переносить в закрытый слот
     const from = state.grid[fromIdx], to = state.grid[toIdx];
     if (!from) return false;
     if (to === null) return true;
