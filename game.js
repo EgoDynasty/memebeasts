@@ -117,6 +117,7 @@
     // страховки для старых сейвов
     if (!state.discovered) state.discovered = {};
     state.grid.forEach(b => { if (b && !state.discovered[b.tier]) state.discovered[b.tier] = b.rarity; });
+    state.grid.forEach(b => { if (b && !b.variant) b.variant = 'plain'; }); // страховка под новое поле variant
     if (!state.firstPlayAt) state.firstPlayAt = now();
     if (!state.freeCaseAt) state.freeCaseAt = now() + C.freeCaseCooldownSec;
     // страховки под новые поля (старые сейвы)
@@ -135,6 +136,22 @@
   C.rarities.forEach(r => rarityById[r.id] = r);
   function rarityName(id) { return t('rarity_' + id); }
 
+  // варианты (модификаторы дохода поверх редкости)
+  const variantById = {};
+  (C.variants || []).forEach(v => variantById[v.id] = v);
+  function variantMult(id) { const v = variantById[id]; return v ? v.mult : 1; }
+  function variantName(id) { const v = variantById[id]; return v ? (LANG === 'en' ? v.en : v.ru) : ''; }
+  function rollVariant() {
+    let roll = Math.random() * 100;
+    for (const v of C.variants) { roll -= v.chance; if (roll <= 0) return v.id; }
+    return 'plain';
+  }
+  function betterVariant(a, b) { return variantMult(a) >= variantMult(b) ? a : b; }
+  function nextVariant(id) {
+    const i = C.variants.findIndex(v => v.id === id);
+    return C.variants[Math.min(i + 1, C.variants.length - 1)].id;
+  }
+
   function boostActive() { return now() < state.boostUntil; }
   function boostFactor() { return boostActive() ? C.boostMult : 1; }
 
@@ -147,7 +164,7 @@
       const nb = state.grid[n];
       if (nb && nb.rarity === b.rarity) bonus += C.neighborBonus;
     }
-    return base * rarityById[b.rarity].mult * bonus;
+    return base * rarityById[b.rarity].mult * variantMult(b.variant) * bonus;
   }
   function neighbors(idx) {
     const col = idx % C.gridCols, row = Math.floor(idx / C.gridCols), res = [];
@@ -157,23 +174,27 @@
     if (row < C.gridRows - 1) res.push(idx + C.gridCols);
     return res;
   }
-  function incomePerSec() {
+  function rawIncome() {
     let sum = 0;
     for (let i = 0; i < SLOTS; i++) sum += beastIncome(i);
-    return sum * boostFactor();
+    return sum;
   }
+  function incomePerSec() { return rawIncome() * boostFactor(); }
   function gain(n) { state.coins += n; state.totalEarned += n; }
 
-  function buyCost()  { return Math.floor(C.buyBase * Math.pow(C.buyGrowth, state.bought)); }
+  // цены привязаны к текущему доходу (без временного буста), но не ниже пола
+  function buyCost()  { return Math.max(C.buyBase,      Math.floor(rawIncome() * C.buySeconds)); }
   function tapPower() { return Math.floor(C.tapBase * Math.pow(C.tapGrowth, state.tapLevel)) * boostFactor(); }
   function tapCost()  { return Math.floor(C.tapCostBase * Math.pow(C.tapCostGrowth, state.tapLevel)); }
-  function caseCost() { return Math.floor(C.caseBase * Math.pow(C.caseGrowth, state.paidCases)); }
+  function caseCost() { return Math.max(C.caseBase,     Math.floor(rawIncome() * C.caseSeconds)); }
+  // покупаемый зверь по нижней границе прогресса, чтобы догонять поле
+  function buyTier()  { return Math.max(1, Math.min(state.highestTier - C.buyTierOffset, C.animals.length)); }
   function firstEmpty() {
     for (let i = 0; i < state.slots; i++) if (state.grid[i] === null) return i;
     return -1;
   }
   function canExpand() { return state.slots < SLOTS; }
-  function slotCost() { return Math.floor(C.slotCostBase * Math.pow(C.slotCostGrowth, state.slots - C.slotsStart)); }
+  function slotCost() { return Math.max(C.slotCostBase, Math.floor(rawIncome() * C.slotSeconds)); }
   function freeCaseReady() { return now() >= state.freeCaseAt; }
 
   function fmt(n) {
@@ -312,6 +333,9 @@
         el.className = 'beast';
         if (hasSameRarityNeighbor(i)) el.classList.add('synergy'); // подсветка бонуса соседства
         el.dataset.idx = i;
+        el.dataset.variant = b.variant || 'plain'; // рамка варианта (золотой/радужный и т.д.)
+        const vc = variantById[b.variant] && variantById[b.variant].color;
+        if (vc && vc !== 'rainbow') el.style.setProperty('--variant', vc);
         el.style.setProperty('--rarity', r.color);
         el.innerHTML =
           '<div class="b-tier">' + b.tier + '</div>' +
@@ -479,8 +503,9 @@
     if (idx === -1 || state.coins < buyCost()) return;
     state.coins -= buyCost();
     state.bought++;
-    state.grid[idx] = { tier: 1, rarity: 'common' };
-    registerBeast(1, 'common');
+    const bt = buyTier();
+    state.grid[idx] = { tier: bt, rarity: 'common', variant: 'plain' };
+    registerBeast(bt, 'common');
     sfx.buy();
     renderGrid(); popSlot(idx); renderStats(); save();
   });
@@ -552,12 +577,12 @@
     let roll = Math.random() * total, tier = ceil;
     for (const o of weights) { roll -= o.w; if (roll <= 0) { tier = o.tr; break; } }
 
-    openCaseAnimation(tier, rarity);
+    openCaseAnimation(tier, rarity, rollVariant());
     renderStats(); save();
   }
 
-  function openCaseAnimation(tier, rarity) {
-    let pending = { tier: tier, rarity: rarity };
+  function openCaseAnimation(tier, rarity, variant) {
+    let pending = { tier: tier, rarity: rarity, variant: variant || 'plain' };
     let upgradeUsed = false;
 
     els.caseModal.classList.remove('hidden');
@@ -572,14 +597,19 @@
       const r = rarityById[pending.rarity];
       els.caseEmoji.innerHTML = beastFace(pending.tier, 'big-img');
       els.caseName.textContent = a.name;
-      els.caseRarity.textContent = rarityName(pending.rarity);
+      els.caseRarity.textContent = rarityName(pending.rarity) +
+        (pending.variant !== 'plain' ? ' • ' + variantName(pending.variant) : '');
       els.caseRarity.style.color = r.color;
       els.caseBox.style.setProperty('--rarity', r.color);
+      els.caseBox.dataset.variant = pending.variant; // рамка варианта на кейсе
       els.caseResult.classList.remove('hidden');
       els.caseClose.classList.remove('hidden');
       sfx.reveal(pending.rarity);
       if (pending.rarity === 'epic' || pending.rarity === 'legendary') {
         burst(innerWidth / 2, innerHeight / 2, pending.rarity === 'legendary' ? '⭐' : '💜', 12);
+      }
+      if (pending.variant === 'gold' || pending.variant === 'rainbow') {
+        burst(innerWidth / 2, innerHeight / 2, pending.variant === 'rainbow' ? '🌈' : '✨', 14);
       }
       // ап редкости за рекламу (один раз на кейс, легендарке некуда расти)
       if (!upgradeUsed && pending.rarity !== 'legendary') {
@@ -615,7 +645,7 @@
     els.caseClose.onclick = () => {
       const idx = firstEmpty();
       if (idx !== -1) {
-        state.grid[idx] = { tier: pending.tier, rarity: pending.rarity };
+        state.grid[idx] = { tier: pending.tier, rarity: pending.rarity, variant: pending.variant };
         registerBeast(pending.tier, pending.rarity);
       }
       els.caseModal.classList.add('hidden');
@@ -682,8 +712,12 @@
           state.grid[fromIdx] = null;
         } else {
           const newRarity = rarityById[from.rarity].mult >= rarityById[to.rarity].mult ? from.rarity : to.rarity;
+          const fv = from.variant || 'plain', tv = to.variant || 'plain';
+          // наследуем лучший вариант; если оба одинаковые - шанс апнуть на ступень (чейз внутри мерджа)
+          let newVariant = betterVariant(fv, tv);
+          if (fv === tv && Math.random() < C.variantMergeUpChance) newVariant = nextVariant(newVariant);
           const newTier = from.tier + 1;
-          state.grid[toIdx] = { tier: newTier, rarity: newRarity };
+          state.grid[toIdx] = { tier: newTier, rarity: newRarity, variant: newVariant };
           state.grid[fromIdx] = null;
           state.mergedOnce = true;
           state.merges++;

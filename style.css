@@ -153,6 +153,27 @@ body {
   100% { transform: scale(1); }
 }
 
+/* ---------- варианты (модификаторы): рамка поверх редкости ---------- */
+.beast[data-variant="bronze"],
+.beast[data-variant="silver"],
+.beast[data-variant="gold"] {
+  border-color: var(--variant);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--variant) 70%, transparent),
+              inset 0 0 0 2px color-mix(in srgb, var(--variant) 55%, transparent);
+}
+.beast[data-variant="gold"] {
+  box-shadow: 0 0 18px color-mix(in srgb, var(--variant) 85%, transparent),
+              inset 0 0 0 2px var(--variant);
+}
+.beast[data-variant="rainbow"] {
+  border-color: #fff;
+  box-shadow: 0 0 18px #f0f, inset 0 0 0 2px #0ff;
+  animation: rainbow-hue 3s linear infinite;
+}
+.case-box[data-variant="gold"] { box-shadow: 0 0 34px #ffcf33; }
+.case-box[data-variant="rainbow"] { animation: rainbow-hue 3s linear infinite; }
+@keyframes rainbow-hue { from { filter: hue-rotate(0); } to { filter: hue-rotate(360deg); } }
+
 /* ---------- нижние кнопки ---------- */
 #actions { display: flex; gap: 8px; position: relative; z-index: 10; flex-shrink: 0; }
 .action-btn {
