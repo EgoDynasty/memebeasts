@@ -25,7 +25,11 @@
   // ---------- служебный сброс прогресса для плейтеста ----------
   // Стираем локальный сейв и перезагружаемся чистыми. Доступно ссылкой ?reset (удобно на телефоне)
   // и кнопкой, которую показываем только вне площадки Яндекса (см. старт).
+  // wiped глушит ЛЮБОЕ сохранение после сброса: иначе beforeunload/автосейв при перезагрузке
+  // записывают прогресс обратно, и сброс "не работает".
+  let wiped = false;
   function wipeAndReload() {
+    wiped = true;
     try { localStorage.removeItem(C.saveKey); } catch (e) {}
     location.replace(location.pathname); // без ?reset, чтобы не зациклиться
   }
@@ -136,6 +140,7 @@
 
   // ---------- сохранение ----------
   function save() {
+    if (wiped) return; // после сброса ничего не пишем, иначе прогресс вернётся при перезагрузке
     state.lastSeen = now();
     try { localStorage.setItem(C.saveKey, JSON.stringify(state)); } catch (e) {}
     P.cloudSave(state);
