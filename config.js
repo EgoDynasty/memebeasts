@@ -84,6 +84,29 @@ window.CONFIG = {
   // Pity: гарантированная легендарка каждые N кейсов
   pityEvery: 45,
 
+  // ---------- ШМОТ + ИНВЕНТАРЬ (второй фарм-луп, живёт в рюкзаке) ----------
+  // 4 слота экипировки, каждый предмет даёт +% КО ВСЕМУ доходу поля (глобальный множитель).
+  // Открывается на unlockTier, чтобы не грузить новичка. Отдельный шмот-кейс, та же валюта.
+  gear: {
+    unlockTier: 4,        // на этом тире открывается рюкзак
+    caseBase: 800,        // пол цены шмот-кейса
+    caseSeconds: 40,      // цена ~40 сек дохода
+    firstGuaranteedRare: true, // первый шмот-кейс минимум редкий (приятный старт)
+    slots: [
+      { id: 'helmet', ru: 'Шлем',      en: 'Helmet', emoji: '🪖' },
+      { id: 'chest',  ru: 'Нагрудник', en: 'Chest',  emoji: '🛡️' },
+      { id: 'legs',   ru: 'Штаны',     en: 'Legs',   emoji: '👖' },
+      { id: 'boots',  ru: 'Сапоги',    en: 'Boots',  emoji: '🥾' },
+    ],
+    // bonus - прибавка к доходу за слот; chance - шанс из шмот-кейса; sellSec/sellFloor - продажа дубля.
+    rarities: [
+      { id: 'common',    ru: 'Обычный',     en: 'Common',    bonus: 0.05, chance: 60, color: '#9aa0a6', sellSec: 3,  sellFloor: 150 },
+      { id: 'rare',      ru: 'Редкий',      en: 'Rare',      bonus: 0.12, chance: 27, color: '#4d9fff', sellSec: 8,  sellFloor: 600 },
+      { id: 'epic',      ru: 'Эпический',   en: 'Epic',      bonus: 0.25, chance: 11, color: '#b45cff', sellSec: 20, sellFloor: 3000 },
+      { id: 'legendary', ru: 'Легендарный', en: 'Legendary', bonus: 0.60, chance: 2,  color: '#ffb300', sellSec: 60, sellFloor: 20000 },
+    ],
+  },
+
   // Оффлайн-доход: кэп в секундах (2 часа)
   offlineCapSec: 2 * 60 * 60,
   // Показываем окно, только если отсутствовал дольше (сек)

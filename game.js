@@ -8,11 +8,19 @@
   const SLOTS = C.gridCols * C.gridRows;
 
   // ---------- защита от зума в мобильных браузерах ----------
-  // Двойной-тап-зум гасит touch-action: manipulation в CSS (на всех элементах).
-  // Здесь добиваем pinch-жест на iOS - клики он не трогает.
+  // iOS Safari 10+ игнорит user-scalable=no, а touch-action: manipulation гасит
+  // двойной-тап-зум не всегда (особенно при быстром долблении маскота). Добиваем руками:
+  //  - pinch-жест;
+  //  - быстрый повторный тап (кроме кнопок, чтобы не рубить их click).
   ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (ev) {
     document.addEventListener(ev, function (e) { e.preventDefault(); }, { passive: false });
   });
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', function (e) {
+    const n = Date.now();
+    if (n - lastTouchEnd <= 320 && !e.target.closest('button, .action-btn')) e.preventDefault();
+    lastTouchEnd = n;
+  }, { passive: false });
 
   // ---------- локализация ----------
   const I18N = {
@@ -36,6 +44,12 @@
       hint_merge: 'Перетащи зверя на такого же - получится круче!',
       hint_case: 'Открой первый кейс - сегодня повезёт 😉',
       rarity_common: 'Обычный', rarity_rare: 'Редкий', rarity_epic: 'Эпический', rarity_legendary: 'ЛЕГЕНДАРНЫЙ',
+      gear_title: 'Экипировка', gear_total: '+{n}% к доходу', gear_empty_slot: 'пусто',
+      gear_inv_label: 'Инвентарь', gear_inv_empty: 'Открывай шмот-кейсы - выпадет экипировка!',
+      gear_equip: 'Надеть', gear_equipped: 'Надето', gear_sell: 'Продать {n}🪙',
+      gear_unlocked: '🎒 Открыта ЭКИПИРОВКА! Собирай сет на бафф дохода',
+      cases_unlocked: '📦 Открыты КЕЙСЫ! Лови редких зверей',
+      gear_drop: 'Выпало: {item}', per_slot: '+{n}%', gear_case: '🎁 Шмот-кейс',
     },
     en: {
       mascot_name: 'CAPYBARA', buy_title: 'Buy a beast', tap_title: '💪 Tap +',
@@ -57,6 +71,12 @@
       hint_merge: 'Drag a beast onto its twin - get a cooler one!',
       hint_case: 'Open your first case - you will get lucky 😉',
       rarity_common: 'Common', rarity_rare: 'Rare', rarity_epic: 'Epic', rarity_legendary: 'LEGENDARY',
+      gear_title: 'Gear', gear_total: '+{n}% income', gear_empty_slot: 'empty',
+      gear_inv_label: 'Inventory', gear_inv_empty: 'Open gear cases to find equipment!',
+      gear_equip: 'Equip', gear_equipped: 'Equipped', gear_sell: 'Sell {n}🪙',
+      gear_unlocked: '🎒 GEAR unlocked! Build a set to boost income',
+      cases_unlocked: '📦 CASES unlocked! Catch rare beasts',
+      gear_drop: 'Dropped: {item}', per_slot: '+{n}%', gear_case: '🎁 Gear case',
     },
   };
   let LANG = 'ru';
@@ -92,6 +112,12 @@
     firstPlayAt: 0,
     rated: false,
     muted: false,
+    // шмот
+    equipped: { helmet: null, chest: null, legs: null, boots: null }, // {slot, rarity} | null
+    inventory: [],                 // не надетые предметы: [{slot, rarity}]
+    gearCasesOpened: 0,
+    // постепенное открытие вкладок (обучение)
+    unlocked: { cases: false, gear: false },
     lastSeen: now(),
   };
   let lastInterstitial = 0; // не сохраняем: кэп на сессию
@@ -129,6 +155,14 @@
       state.slots = Math.max(C.slotsStart, lastOcc + 1); // не запираем уже занятые слоты
     }
     state.slots = Math.min(state.slots, SLOTS);
+    // страховки под шмот и открытие вкладок (старые сейвы)
+    if (!state.equipped) state.equipped = { helmet: null, chest: null, legs: null, boots: null };
+    if (!Array.isArray(state.inventory)) state.inventory = [];
+    if (state.gearCasesOpened == null) state.gearCasesOpened = 0;
+    if (!state.unlocked) state.unlocked = { cases: false, gear: false };
+    // если игрок уже прошёл вехи - вкладки сразу открыты (не прячем то, чем уже пользовались)
+    if (state.mergedOnce || state.casesOpened > 0) state.unlocked.cases = true;
+    if (state.highestTier >= C.gear.unlockTier) state.unlocked.gear = true;
   }
 
   // ---------- экономика ----------
@@ -150,6 +184,39 @@
   function nextVariant(id) {
     const i = C.variants.findIndex(v => v.id === id);
     return C.variants[Math.min(i + 1, C.variants.length - 1)].id;
+  }
+
+  // ---------- шмот (глобальный бафф дохода) ----------
+  const gearRarityById = {};
+  (C.gear.rarities || []).forEach(r => gearRarityById[r.id] = r);
+  const gearSlotById = {};
+  (C.gear.slots || []).forEach(s => gearSlotById[s.id] = s);
+  function gearRarityName(id) { const r = gearRarityById[id]; return r ? (LANG === 'en' ? r.en : r.ru) : ''; }
+  function gearSlotName(id) { const s = gearSlotById[id]; return s ? (LANG === 'en' ? s.en : s.ru) : ''; }
+  function gearBonusOf(rarity) { const r = gearRarityById[rarity]; return r ? r.bonus : 0; }
+  function gearBonus() { // множитель ко всему доходу поля = 1 + сумма надетых
+    let sum = 0;
+    for (const s of C.gear.slots) { const it = state.equipped[s.id]; if (it) sum += gearBonusOf(it.rarity); }
+    return 1 + sum;
+  }
+  function gearBonusPct() { return Math.round((gearBonus() - 1) * 100); }
+  function rollGearRarity() {
+    let roll = Math.random() * 100;
+    for (const r of C.gear.rarities) { roll -= r.chance; if (roll <= 0) return r.id; }
+    return 'common';
+  }
+  function gearCaseCost() { return Math.max(C.gear.caseBase, Math.floor(rawIncome() * C.gear.caseSeconds)); }
+  function gearSellValue(rarity) {
+    const r = gearRarityById[rarity];
+    return Math.max(r.sellFloor, Math.floor(rawIncome() * r.sellSec));
+  }
+  function gearUnlocked() { return state.unlocked && state.unlocked.gear; }
+  function hasGearUpgrade() { // в инвентаре лежит предмет сильнее надетого в его слоте
+    for (const it of state.inventory) {
+      const cur = state.equipped[it.slot];
+      if (!cur || gearBonusOf(it.rarity) > gearBonusOf(cur.rarity)) return true;
+    }
+    return false;
   }
 
   function boostActive() { return now() < state.boostUntil; }
@@ -179,7 +246,7 @@
     for (let i = 0; i < SLOTS; i++) sum += beastIncome(i);
     return sum;
   }
-  function incomePerSec() { return rawIncome() * boostFactor(); }
+  function incomePerSec() { return rawIncome() * boostFactor() * gearBonus(); }
   function gain(n) { state.coins += n; state.totalEarned += n; }
 
   // цены привязаны к текущему доходу (без временного буста), но не ниже пола
@@ -273,6 +340,11 @@
     dailyAmount: $('daily-amount'), dailyClaim: $('daily-claim'),
     collectionModal: $('collection-modal'), collectionGrid: $('collection-grid'), collectionClose: $('collection-close'),
     rateModal: $('rate-modal'), rateYes: $('rate-yes'), rateNo: $('rate-no'),
+    gearBtn: $('gear-btn'), gearBadge: $('gear-badge'), gearDot: $('gear-dot'),
+    gearModal: $('gear-modal'), gearTotal: $('gear-total'),
+    gearSlots: $('gear-slots'), gearCaseBtn: $('gear-case-btn'), gearCaseTitle: $('gear-case-title'),
+    gearCaseCost: $('gear-case-cost'), gearInvLabel: $('gear-inv-label'), gearInv: $('gear-inv'),
+    gearClose: $('gear-close'),
   };
 
   function floater(text, x, y, color) {
@@ -400,15 +472,26 @@
   });
 
   function renderStats() {
+    checkUnlocks();
     els.coins.textContent = fmt(state.coins);
     els.income.textContent = t('per_sec', { n: fmt(incomePerSec()) });
+    els.gearBtn.classList.toggle('hidden', !gearUnlocked());
+    if (gearUnlocked()) {
+      const pct = gearBonusPct();
+      els.gearBadge.textContent = '+' + pct + '%';
+      els.gearBadge.classList.toggle('hidden', pct <= 0);
+      els.gearDot.classList.toggle('hidden', !hasGearUpgrade());
+    }
     els.tapPower.textContent = t('per_tap', { n: fmt(tapPower()) });
     els.buyCost.textContent = '🪙 ' + fmt(buyCost());
     els.tapCost.textContent = '🪙 ' + fmt(tapCost());
     els.buyBtn.disabled = state.coins < buyCost() || firstEmpty() === -1;
     els.tapBtn.disabled = state.coins < tapCost();
     els.muteBtn.textContent = state.muted ? '🔇' : '🔊';
+    els.collectionBtn.classList.toggle('hidden', Object.keys(state.discovered).length === 0);
 
+    // кейс скрыт до первого мерджа (обучение), потом открывается насовсем
+    els.caseBtn.classList.toggle('hidden', !state.unlocked.cases);
     // кейс: бесплатный за рекламу или за монеты
     if (freeCaseReady()) {
       els.caseTitle.textContent = t('case_free');
@@ -489,6 +572,171 @@
   els.collectionBtn.addEventListener('click', () => { renderCollection(); els.collectionModal.classList.remove('hidden'); });
   els.collectionClose.addEventListener('click', () => els.collectionModal.classList.add('hidden'));
 
+  // ---------- тост (открытие вкладок и события) ----------
+  function toast(text) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = text;
+    document.body.appendChild(el);
+    setTimeout(() => el.classList.add('show'), 20);
+    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 350); }, 2600);
+  }
+
+  // ---------- постепенное открытие вкладок (обучение) ----------
+  // Кейсы открываются после первого мерджа, рюкзак - на unlockTier. Один раз с тостом.
+  function checkUnlocks() {
+    if (!state.unlocked.cases && (state.mergedOnce || state.casesOpened > 0)) {
+      state.unlocked.cases = true;
+      toast(t('cases_unlocked')); sfx.coin(); save();
+    }
+    if (!state.unlocked.gear && state.highestTier >= C.gear.unlockTier) {
+      state.unlocked.gear = true;
+      toast(t('gear_unlocked')); sfx.reveal('epic'); save();
+    }
+  }
+
+  // ---------- ШМОТ: экипировка + инвентарь ----------
+  function equip(item) {
+    // надеть предмет из инвентаря; предыдущий из слота вернуть в инвентарь
+    const i = state.inventory.indexOf(item);
+    if (i === -1) return;
+    state.inventory.splice(i, 1);
+    const prev = state.equipped[item.slot];
+    state.equipped[item.slot] = item;
+    if (prev) state.inventory.push(prev);
+    sfx.buy(); renderGear(); popEl(els.gearTotal); renderStats(); save();
+  }
+  function unequip(slot) {
+    const it = state.equipped[slot];
+    if (!it) return;
+    state.equipped[slot] = null;
+    state.inventory.push(it);
+    sfx.tap(); renderGear(); renderStats(); save();
+  }
+  function sellItem(item) {
+    const i = state.inventory.indexOf(item);
+    if (i === -1) return;
+    const val = gearSellValue(item.rarity);
+    state.inventory.splice(i, 1);
+    gain(val); sfx.coin();
+    floater('+' + fmt(val) + '🪙', innerWidth / 2, innerHeight / 2, '#4cd964');
+    renderGear(); renderStats(); save();
+  }
+  function autoEquipOrStore(item) {
+    // авто-надеть, если слот пуст или новый предмет лучше (QoL); иначе в инвентарь
+    const cur = state.equipped[item.slot];
+    if (!cur || gearBonusOf(item.rarity) > gearBonusOf(cur.rarity)) {
+      if (cur) state.inventory.push(cur);
+      state.equipped[item.slot] = item;
+    } else {
+      state.inventory.push(item);
+    }
+  }
+
+  function openGearCase() {
+    let rarity;
+    if (C.gear.firstGuaranteedRare && state.gearCasesOpened === 0) {
+      rarity = 'rare';
+    } else {
+      rarity = rollGearRarity();
+    }
+    state.gearCasesOpened++;
+    const slots = C.gear.slots;
+    const slot = slots[Math.floor(Math.random() * slots.length)].id;
+    const item = { slot, rarity };
+    autoEquipOrStore(item);
+    sfx.reveal(rarity);
+    const label = gearSlotById[slot].emoji + ' ' + gearRarityName(rarity) + ' ' + gearSlotName(slot) +
+      ' (' + t('per_slot', { n: Math.round(gearBonusOf(rarity) * 100) }) + ')';
+    floater(t('gear_drop', { item: label }), innerWidth / 2, innerHeight / 2.6,
+      gearRarityById[rarity].color);
+    if (rarity === 'epic' || rarity === 'legendary') {
+      burst(innerWidth / 2, innerHeight / 2, rarity === 'legendary' ? '⭐' : '💜', 12);
+    }
+    renderGear(); popEl(els.gearTotal); renderStats(); save();
+  }
+
+  function renderGear() {
+    // сумма бонуса
+    els.gearTotal.textContent = t('gear_total', { n: gearBonusPct() });
+    els.gearTotal.classList.toggle('active', gearBonusPct() > 0);
+
+    // слоты экипировки
+    els.gearSlots.innerHTML = '';
+    C.gear.slots.forEach(s => {
+      const it = state.equipped[s.id];
+      const cell = document.createElement('div');
+      cell.className = 'gear-slot';
+      if (it) {
+        const r = gearRarityById[it.rarity];
+        cell.style.setProperty('--rarity', r.color);
+        cell.classList.add('filled');
+        cell.innerHTML = '<div class="gs-emoji">' + s.emoji + '</div>' +
+          '<div class="gs-bonus" style="color:' + r.color + '">' + t('per_slot', { n: Math.round(r.bonus * 100) }) + '</div>';
+        cell.title = gearRarityName(it.rarity) + ' ' + gearSlotName(s.id);
+        cell.onclick = () => unequip(s.id); // тап по надетому - снять
+      } else {
+        cell.innerHTML = '<div class="gs-emoji dim">' + s.emoji + '</div>' +
+          '<div class="gs-bonus dim">' + t('gear_empty_slot') + '</div>';
+        cell.onclick = null;
+      }
+      els.gearSlots.appendChild(cell);
+    });
+
+    // цена шмот-кейса
+    els.gearCaseTitle.textContent = t('gear_case');
+    els.gearCaseCost.textContent = '🪙 ' + fmt(gearCaseCost());
+    els.gearCaseBtn.disabled = state.coins < gearCaseCost();
+
+    // инвентарь (не надетые)
+    els.gearInvLabel.textContent = t('gear_inv_label') + ' (' + state.inventory.length + ')';
+    els.gearInv.innerHTML = '';
+    if (state.inventory.length === 0) {
+      const em = document.createElement('div');
+      em.className = 'gear-inv-empty';
+      em.textContent = t('gear_inv_empty');
+      els.gearInv.appendChild(em);
+    } else {
+      // сортируем по слоту, затем по силе (сильные сверху)
+      const sorted = state.inventory.slice().sort((a, b) =>
+        gearBonusOf(b.rarity) - gearBonusOf(a.rarity));
+      sorted.forEach(item => {
+        const r = gearRarityById[item.rarity];
+        const cur = state.equipped[item.slot];
+        const isBetter = !cur || gearBonusOf(item.rarity) > gearBonusOf(cur.rarity);
+        const card = document.createElement('div');
+        card.className = 'inv-item';
+        card.style.setProperty('--rarity', r.color);
+        card.innerHTML =
+          '<div class="inv-emoji">' + gearSlotById[item.slot].emoji + '</div>' +
+          '<div class="inv-info"><div class="inv-name">' + gearSlotName(item.slot) + '</div>' +
+          '<div class="inv-rar" style="color:' + r.color + '">' + gearRarityName(item.rarity) +
+          ' ' + t('per_slot', { n: Math.round(r.bonus * 100) }) + '</div></div>';
+        const acts = document.createElement('div');
+        acts.className = 'inv-acts';
+        const eq = document.createElement('button');
+        eq.className = 'inv-btn equip' + (isBetter ? ' hot' : '');
+        eq.textContent = t('gear_equip');
+        eq.onclick = () => equip(item);
+        const sell = document.createElement('button');
+        sell.className = 'inv-btn sell';
+        sell.textContent = t('gear_sell', { n: fmt(gearSellValue(item.rarity)) });
+        sell.onclick = () => sellItem(item);
+        acts.appendChild(eq); acts.appendChild(sell);
+        card.appendChild(acts);
+        els.gearInv.appendChild(card);
+      });
+    }
+  }
+
+  els.gearBtn.addEventListener('click', () => { renderGear(); els.gearModal.classList.remove('hidden'); });
+  els.gearClose.addEventListener('click', () => els.gearModal.classList.add('hidden'));
+  els.gearCaseBtn.addEventListener('click', () => {
+    if (state.coins < gearCaseCost()) { sfx.fail(); return; }
+    state.coins -= gearCaseCost();
+    openGearCase();
+  });
+
   // ---------- тап ----------
   els.mascot.addEventListener('pointerdown', (e) => {
     gain(tapPower());
@@ -533,6 +781,11 @@
   function popSlot(idx) {
     const el = els.grid.querySelector('.beast[data-idx="' + idx + '"]');
     if (el) { el.classList.add('pop'); setTimeout(() => el.classList.remove('pop'), 400); }
+  }
+  function popEl(el) {
+    if (!el) return;
+    el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+    setTimeout(() => el.classList.remove('pop'), 400);
   }
 
   // ---------- кейсы ----------

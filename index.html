@@ -19,6 +19,7 @@
     </div>
     <div class="topbar-btns">
       <button id="boost-btn" class="icon-btn boost" title="x2">📺 x2</button>
+      <button id="gear-btn" class="icon-btn hidden" title="Экипировка">🎒<span id="gear-badge" class="gear-badge hidden"></span><span id="gear-dot" class="gear-dot hidden"></span></button>
       <button id="collection-btn" class="icon-btn" title="Коллекция">📖</button>
       <button id="mute-btn" class="icon-btn" title="Звук">🔊</button>
     </div>
@@ -99,6 +100,24 @@
       <h2 data-i18n="collection">Коллекция</h2>
       <div id="collection-grid"></div>
       <button id="collection-close" class="action-btn" data-i18n="close">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- Экипировка / инвентарь -->
+  <div id="gear-modal" class="modal hidden">
+    <div class="modal-box wide">
+      <div class="gear-head">
+        <h2 data-i18n="gear_title">Экипировка</h2>
+        <span id="gear-total" class="gear-total"></span>
+      </div>
+      <div id="gear-slots" class="gear-slots"></div>
+      <button id="gear-case-btn" class="action-btn case">
+        <span class="btn-title" id="gear-case-title">🎁 Шмот-кейс</span>
+        <span class="btn-cost" id="gear-case-cost">🪙 800</span>
+      </button>
+      <div id="gear-inv-label" class="gear-inv-label"></div>
+      <div id="gear-inv" class="gear-inv"></div>
+      <button id="gear-close" class="action-btn" data-i18n="close">Закрыть</button>
     </div>
   </div>
 
