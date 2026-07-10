@@ -22,6 +22,15 @@
     lastTouchEnd = n;
   }, { passive: false });
 
+  // ---------- служебный сброс прогресса для плейтеста ----------
+  // Стираем локальный сейв и перезагружаемся чистыми. Доступно ссылкой ?reset (удобно на телефоне)
+  // и кнопкой, которую показываем только вне площадки Яндекса (см. старт).
+  function wipeAndReload() {
+    try { localStorage.removeItem(C.saveKey); } catch (e) {}
+    location.replace(location.pathname); // без ?reset, чтобы не зациклиться
+  }
+  if (/[?&]reset(\b|=)/.test(location.search)) { wipeAndReload(); return; }
+
   // ---------- локализация ----------
   const I18N = {
     ru: {
@@ -345,6 +354,7 @@
     gearSlots: $('gear-slots'), gearCaseBtn: $('gear-case-btn'), gearCaseTitle: $('gear-case-title'),
     gearCaseCost: $('gear-case-cost'), gearInvLabel: $('gear-inv-label'), gearInv: $('gear-inv'),
     gearClose: $('gear-close'),
+    testReset: $('test-reset'),
   };
 
   function floater(text, x, y, color) {
@@ -1061,6 +1071,14 @@
   // ---------- старт ----------
   P.init(function (lang) {
     LANG = lang;
+    // тестовая кнопка сброса: только вне площадки Яндекса (на витрине игроки её не увидят)
+    if (!P.isYandex()) {
+      els.testReset.classList.remove('hidden');
+      els.testReset.onclick = () => {
+        const msg = LANG === 'en' ? 'Reset all progress? (test)' : 'Сбросить весь прогресс? (тест)';
+        if (typeof confirm !== 'function' || confirm(msg)) wipeAndReload();
+      };
+    }
     const local = loadLocal();
     P.cloudLoad(function (cloud) {
       // берём более свежий сейв

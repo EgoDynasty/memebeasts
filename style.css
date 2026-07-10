@@ -264,6 +264,15 @@ body {
 }
 .streak-dot.on { background: var(--accent); }
 
+/* ---------- служебная кнопка сброса (только тест, в проде скрыта) ---------- */
+.test-reset {
+  position: fixed; left: 8px; bottom: 8px; z-index: 300;
+  background: rgba(255,59,92,.85); color: #fff; border: 1px dashed #fff;
+  border-radius: 10px; font-family: inherit; font-weight: 800; font-size: 12px;
+  padding: 6px 10px; cursor: pointer; opacity: .75;
+}
+.test-reset:active { transform: scale(.94); }
+
 /* ---------- бейдж и точка-уведомление на рюкзаке ---------- */
 #gear-btn { position: relative; overflow: visible; }
 .gear-badge {
